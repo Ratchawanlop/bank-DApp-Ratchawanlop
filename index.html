@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank DApp</title>
+    <!-- โหลด Ethers.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="application/javascript"></script>
+    <!-- โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-slate-800 mb-6">Bank DApp</h1>
+
+        <!-- ข้อมูลนักศึกษา -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-sm text-blue-900">
+            <p><span class="font-semibold">รหัสนักศึกษา:</span> 66086928</p>
+            <p><span class="font-semibold">ชื่อ-สกุล:</span> ราชวัลลภ นาว์เพ็ชร์</p>
+        </div>
+
+        <!-- ปุ่มเชื่อมต่อ Metamask -->
+        <button id="connectWalletBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 mb-2">
+            Connect Metamask
+        </button>
+        <p id="walletAddress" class="text-xs text-center text-slate-500 mb-6 truncate"></p>
+
+        <!-- ส่วนกรอก Contract Address -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Contract Address</label>
+            <input type="text" id="contractAddressInput" placeholder="0x..." class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <hr class="mb-6 border-slate-200">
+
+        <!-- ส่วนตรวจสอบยอดเงิน -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-slate-700 font-medium">ยอดเงินในธนาคาร:</span>
+                <span class="text-lg font-bold text-indigo-600"><span id="balanceDisplay">0.00</span> ETH</span>
+            </div>
+            <button id="checkBalanceBtn" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                Check Balance
+            </button>
+        </div>
+
+        <!-- ส่วนฝากเงิน -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-700 mb-1">ฝากเงิน (ETH)</label>
+            <div class="flex gap-2">
+                <input type="number" id="depositInput" step="0.0001" min="0" placeholder="0.00" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <button id="depositBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">
+                    Deposit
+                </button>
+            </div>
+        </div>
+
+        <!-- ส่วนถอนเงิน -->
+        <div class="mb-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">ถอนเงิน (ETH)</label>
+            <div class="flex gap-2">
+                <input type="number" id="withdrawInput" step="0.0001" min="0" placeholder="0.00" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <button id="withdrawBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">
+                    Withdraw
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const contractABI = [
+            "function deposit() public payable",
+            "function withdraw(uint amount) public",
+            "function checkBlance() public view returns (uint)"
+        ];
+
+        let provider;
+        let signer;
+
+        const connectWalletBtn = document.getElementById('connectWalletBtn');
+        const walletAddressDisplay = document.getElementById('walletAddress');
+        const balanceDisplay = document.getElementById('balanceDisplay');
+
+        // ฟังก์ชันเชื่อมต่อ Metamask
+        connectWalletBtn.addEventListener('click', async () => {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+
+                    const address = await signer.getAddress();
+                    walletAddressDisplay.innerText = "Connected: " + address;
+                    connectWalletBtn.innerText = "Wallet Connected";
+                    connectWalletBtn.classList.replace('bg-indigo-600', 'bg-slate-400');
+                    connectWalletBtn.disabled = true;
+                    
+                    alert("เชื่อมต่อ Metamask สำเร็จ!");
+                } catch (error) {
+                    console.error(error);
+                    alert("การเชื่อมต่อถูกปฏิเสธ");
+                }
+            } else {
+                alert("กรุณาติดตั้ง Metamask Extension");
+            }
+        });
+
+        // ฟังก์ชันช่วยสร้าง Contract Instance แบบดึงที่อยู่ใหม่ทุกครั้ง
+        function getContract() {
+            const address = document.getElementById('contractAddressInput').value.trim();
+            if (!address) {
+                alert("กรุณากรอก Contract Address");
+                return null;
+            }
+            if (!signer) {
+                alert("กรุณาเชื่อมต่อ Metamask ก่อน");
+                return null;
+            }
+            return new ethers.Contract(address, contractABI, signer);
+        }
+
+        // Check Balance
+        document.getElementById('checkBalanceBtn').addEventListener('click', async () => {
+            const contract = getContract();
+            if (!contract) return;
+            try {
+                const balanceWei = await contract.checkBlance();
+                const balanceEth = ethers.utils.formatEther(balanceWei);
+                balanceDisplay.innerText = parseFloat(balanceEth).toFixed(4);
+            } catch (error) {
+                console.error(error);
+                alert("เกิดข้อผิดพลาดในการดึงยอดเงิน กรุณาตรวจสอบ Address");
+            }
+        });
+
+        // Deposit
+        document.getElementById('depositBtn').addEventListener('click', async () => {
+            const contract = getContract();
+            if (!contract) return;
+            const amount = document.getElementById('depositInput').value;
+            if (!amount || amount <= 0) return alert("กรุณาระบุจำนวนเงินที่ถูกต้อง");
+
+            try {
+                const amountWei = ethers.utils.parseEther(amount);
+                const tx = await contract.deposit({ value: amountWei });
+                await tx.wait();
+                alert("ฝากเงินสำเร็จ!");
+                document.getElementById('depositInput').value = '';
+                document.getElementById('checkBalanceBtn').click(); 
+            } catch (error) {
+                console.error(error);
+                alert("เกิดข้อผิดพลาดในการฝากเงิน");
+            }
+        });
+
+        // Withdraw
+        document.getElementById('withdrawBtn').addEventListener('click', async () => {
+            const contract = getContract();
+            if (!contract) return;
+            const amount = document.getElementById('withdrawInput').value;
+            if (!amount || amount <= 0) return alert("กรุณาระบุจำนวนเงินที่ถูกต้อง");
+
+            try {
+                const amountWei = ethers.utils.parseEther(amount);
+                const tx = await contract.withdraw(amountWei);
+                await tx.wait();
+                alert("ถอนเงินสำเร็จ!");
+                document.getElementById('withdrawInput').value = '';
+                document.getElementById('checkBalanceBtn').click(); 
+            } catch (error) {
+                console.error(error);
+                alert("เกิดข้อผิดพลาด หรือยอดเงินไม่เพียงพอ");
+            }
+        });
+    </script>
+</body>
+</html>
